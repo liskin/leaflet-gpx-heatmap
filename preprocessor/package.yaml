@@ -1,0 +1,16 @@
+name: leaflet-gpx-heatmap
+version: '0.1.0.0'
+synopsis: TODO
+maintainer: Tomáš Janoušek <tomi@nomi.cz>
+copyright: (c) 2019 Tomáš Janoušek
+license: BSD3
+github: liskin/leaflet-gpx-heatmap
+
+executable:
+    source-dirs: src
+    main: Main.hs
+    dependencies:
+        - base
+    ghc-options:
+        - -threaded
+        - -Wall

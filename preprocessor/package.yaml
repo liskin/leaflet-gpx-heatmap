@@ -11,6 +11,7 @@ executable:
     main: Main.hs
     dependencies:
         - base
+        - conduit
         - directory
         - filepath
     ghc-options:

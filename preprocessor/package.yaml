@@ -11,6 +11,8 @@ executable:
     main: Main.hs
     dependencies:
         - base
+        - directory
+        - filepath
     ghc-options:
         - -threaded
         - -Wall

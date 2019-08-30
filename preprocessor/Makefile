@@ -5,4 +5,4 @@ ghci:
 	stack ghci
 
 ghcid:
-	ghcid -c "stack ghci"
+	ghcid --restart package.yaml -c "stack ghci"

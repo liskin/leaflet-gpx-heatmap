@@ -37,7 +37,7 @@ parseGpxC = parseBytes def .| parseXmlC
             pure Point{ ptLat = lat, ptLon = lon }
 
 parseFileC :: FilePath -> ConduitT i InputEvent M ()
-parseFileC i = sourceFile i .| ungzipIfNeeded .| parseGpxC
+parseFileC i = sourceFile i .| ungzipIfNeeded .| (parseGpxC >> sinkNull)
     where
         ungzipIfNeeded
             | "gz" `isExtensionOf` i = ungzip

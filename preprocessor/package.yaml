@@ -19,7 +19,6 @@ executable:
         - filepath
         - text
         - xml-conduit
-        - xml-types
     ghc-options:
         - -threaded
         - -Wall

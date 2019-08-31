@@ -13,6 +13,7 @@ executable:
         - base
         - bytestring
         - conduit
+        - conduit-extra
         - directory
         - filepath
     ghc-options:

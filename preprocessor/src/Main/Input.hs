@@ -2,6 +2,7 @@ module Main.Input where
 
 import Conduit
 import Data.ByteString (ByteString)
+import Data.Conduit.Zlib (ungzip)
 import Data.Monoid
 import System.Directory (doesDirectoryExist, doesFileExist)
 import System.FilePath (isExtensionOf)
@@ -15,7 +16,10 @@ gpxInDirectoryC :: FilePath -> ConduitT a FilePath M ()
 gpxInDirectoryC d = sourceDirectoryDeep False d .| filterC isGpx
 
 processFileC :: ConduitT ByteString o M () -> FilePath -> ConduitT i o M ()
-processFileC c i = sourceFile i .| c
+processFileC c i
+    | "gpx" `isExtensionOf` i = sourceFile i .| c
+    | "gpx.gz" `isExtensionOf` i = sourceFile i .| ungzip .| c
+    | otherwise = fail $ "bad input file/dir: " <> i
 
 processInputC :: ConduitT ByteString o M () -> FilePath -> ConduitT i o M ()
 processInputC c i = do
@@ -23,8 +27,8 @@ processInputC c i = do
     isFile <- liftIO $ doesFileExist i
     case (isDir, isFile) of
         (True, _) -> gpxInDirectoryC i .| awaitForever (processFileC c)
-        (_, True) | isGpx i -> processFileC c i
-        (_, _) -> fail $ "bad input file/dir: " <> i
+        (_, True) -> processFileC c i
+        (_, _) -> fail $ "nonexistent file/dir: " <> i
 
 processInputsC :: ConduitT ByteString o M () -> ConduitT FilePath o M ()
 processInputsC c = awaitForever (processInputC c)

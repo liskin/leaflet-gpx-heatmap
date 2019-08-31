@@ -14,8 +14,12 @@ executable:
         - bytestring
         - conduit
         - conduit-extra
+        - data-default
         - directory
         - filepath
+        - text
+        - xml-conduit
+        - xml-types
     ghc-options:
         - -threaded
         - -Wall

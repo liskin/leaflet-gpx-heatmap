@@ -1,13 +1,24 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 module Main.Input where
 
 import Conduit
+import Control.Monad
 import Data.ByteString (ByteString)
 import Data.Conduit.Zlib (ungzip)
-import Data.Monoid
+import Data.Default
+import Data.XML.Types (Event)
 import System.Directory (doesDirectoryExist, doesFileExist)
 import System.FilePath (isExtensionOf)
+import Text.XML (Name(nameLocalName))
+import Text.XML.Stream.Parse
+
+import qualified Data.Text as T
 
 type M = ResourceT IO
+
+data InputEvent = EndTrkSeg | Point{ ptLat :: Double, ptLon :: Double }
+    deriving (Show, Eq, Ord)
 
 isGpx :: FilePath -> Bool
 isGpx f = "gpx" `isExtensionOf` f || "gpx.gz" `isExtensionOf` f
@@ -35,3 +46,23 @@ processInputsC c = awaitForever (processInputC c)
 
 processInputs :: Monoid a => ConduitT ByteString a M () -> [FilePath] -> IO a
 processInputs c is = runConduitRes $ yieldMany is .| processInputsC c .| foldC
+
+processGpxC :: ConduitT ByteString InputEvent M ()
+processGpxC = parseBytes def .| parseGpxC
+
+parseGpxC :: ConduitT Event InputEvent M ()
+parseGpxC = do
+    force "<gpx> expected" $ tagIgnoreAttrs (unqual "gpx") $ do
+        void $ many' $ tagIgnoreAttrs (unqual "trk") $ do
+            manyYield' $ tagIgnoreAttrs (unqual "trkseg") $ do
+                manyYield' $ tag' (unqual "trkpt") trkPkAttrs $ \pt -> do
+                    many_ ignoreAnyTreeContent
+                    pure pt
+                pure EndTrkSeg
+    where
+        unqual t = matching ((t ==) . nameLocalName)
+        trkPkAttrs = do
+            lat <- read . T.unpack <$> requireAttr "lat"
+            lon <- read . T.unpack <$> requireAttr "lon"
+            ignoreAttrs
+            pure Point{ ptLat = lat, ptLon = lon }

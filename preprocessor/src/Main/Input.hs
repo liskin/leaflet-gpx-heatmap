@@ -1,6 +1,8 @@
 module Main.Input where
 
 import Conduit
+import Data.ByteString (ByteString)
+import Data.Monoid
 import System.Directory (doesDirectoryExist, doesFileExist)
 import System.FilePath (isExtensionOf)
 
@@ -12,17 +14,20 @@ isGpx f = "gpx" `isExtensionOf` f || "gpx.gz" `isExtensionOf` f
 gpxInDirectoryC :: FilePath -> ConduitT a FilePath M ()
 gpxInDirectoryC d = sourceDirectoryDeep False d .| filterC isGpx
 
-expandInputC :: FilePath -> ConduitT a FilePath M ()
-expandInputC i = do
+processFileC :: ConduitT ByteString o M () -> FilePath -> ConduitT i o M ()
+processFileC c i = sourceFile i .| c
+
+processInputC :: ConduitT ByteString o M () -> FilePath -> ConduitT i o M ()
+processInputC c i = do
     isDir <- liftIO $ doesDirectoryExist i
     isFile <- liftIO $ doesFileExist i
     case (isDir, isFile) of
-        (True, _) -> gpxInDirectoryC i
-        (_, True) | isGpx i -> yield i
+        (True, _) -> gpxInDirectoryC i .| awaitForever (processFileC c)
+        (_, True) | isGpx i -> processFileC c i
         (_, _) -> fail $ "bad input file/dir: " <> i
 
-expandInputsC :: ConduitT FilePath FilePath M ()
-expandInputsC = awaitForever expandInputC
+processInputsC :: ConduitT ByteString o M () -> ConduitT FilePath o M ()
+processInputsC c = awaitForever (processInputC c)
 
-expandInputs :: [FilePath] -> IO [FilePath]
-expandInputs is = runConduitRes $ yieldMany is .| expandInputsC .| sinkList
+processInputs :: Monoid a => ConduitT ByteString a M () -> [FilePath] -> IO a
+processInputs c is = runConduitRes $ yieldMany is .| processInputsC c .| foldC

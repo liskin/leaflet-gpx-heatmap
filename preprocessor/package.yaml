@@ -10,9 +10,12 @@ executable:
     source-dirs: src
     main: Main.hs
     dependencies:
+        - ascii-progress
         - base
         - bytestring
         - bytestring-lexing
+        - containers
+        - deepseq
         - directory
         - filepath
         - parallel-io

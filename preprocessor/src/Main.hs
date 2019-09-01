@@ -22,14 +22,15 @@ main = do
 loadInputs :: [FilePath] -> IO (Map FilePath [TrackSegment])
 loadInputs files = do
     inputs <- sortBy (comparing fst) <$> expandInputs files
-    fmap Map.fromList $ progressParallel "Loading GPX files" $
+    fmap Map.fromList $ progress "Loading GPX files" parallel $
         flip map inputs $ \(filename, parseInput) -> do
             !input <- force <$> parseInput
             pure (filename, input)
 
-progressParallel :: String -> [IO a] -> IO [a]
-progressParallel what as = displayConsoleRegions $ do
-    progress <- newProgressBar def{ pgTotal = fromIntegral (length as), pgFormat = format }
-    parallel $ map (<* tick progress) as
+progress :: String -> ([IO a] -> IO [a]) -> ([IO a] -> IO [a])
+progress what sequence' as = displayConsoleRegions $ do
+    progressBar <- newProgressBar progressOpts
+    sequence' $ map (<* tick progressBar) as
     where
+        progressOpts = def{ pgTotal = fromIntegral (length as), pgFormat = format }
         format = what <> " :percent [:bar] :current/:total (for :elapsed, :eta remaining)"

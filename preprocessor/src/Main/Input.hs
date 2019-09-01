@@ -1,65 +1,71 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Main.Input (InputEvent(..), M, parseInputs) where
+module Main.Input (Input, Point, TrackSegment, expandInputs) where
 
-import Conduit
-import Control.Monad
 import Data.ByteString (ByteString)
-import Data.Conduit.Zlib (ungzip)
-import Data.Default
-import System.Directory (doesDirectoryExist, doesFileExist)
-import System.FilePath (isExtensionOf)
-import Text.XML (Name(nameLocalName))
-import Text.XML.Stream.Parse
+import System.Directory (listDirectory, doesDirectoryExist, doesFileExist)
+import System.FilePath ((</>), isExtensionOf)
+import Xeno.Types (XenoException)
 
-import qualified Data.Text as T
+import qualified Codec.Compression.GZip as GZip
+import qualified Data.ByteString as B
+import qualified Data.ByteString.Lazy as BL
+import qualified Data.ByteString.Lex.Fractional as B (readDecimal, readSigned)
+import qualified Data.Vector.Unboxed as UV
+import qualified Xeno.DOM as X
 
-type M = ResourceT IO
+type Point = (Double, Double)
+type TrackSegment = UV.Vector Point
+type Input = (FilePath, IO [TrackSegment])
 
-data InputEvent = EndTrkSeg | Point{ ptLat :: Double, ptLon :: Double }
-    deriving (Show, Eq, Ord)
-
-parseGpxC :: ConduitT ByteString InputEvent M ()
-parseGpxC = parseBytes def .| parseXmlC
+parseGpx :: ByteString -> Either XenoException [TrackSegment]
+parseGpx = fmap parseXml . X.parse
     where
-        parseXmlC = force "<gpx> expected" $ tagIgnoreAttrs (unqual "gpx") $ do
-            void $ many' $ tagIgnoreAttrs (unqual "trk") $ do
-                manyYield' $ tagIgnoreAttrs (unqual "trkseg") $ do
-                    manyYield' $ tag' (unqual "trkpt") trkPkAttrs $ \pt -> do
-                        many_ ignoreAnyTreeContent
-                        pure pt
-                    pure EndTrkSeg
-        unqual t = matching ((t ==) . nameLocalName)
-        trkPkAttrs = do
-            lat <- read . T.unpack <$> requireAttr "lat"
-            lon <- read . T.unpack <$> requireAttr "lon"
-            ignoreAttrs
-            pure Point{ ptLat = lat, ptLon = lon }
+        parseXml xml =
+            [ parseTrkSeg trkseg
+            | trk <- X.children xml
+            , X.name trk == "trk"
+            , trkseg <- X.children trk
+            , X.name trkseg == "trkseg"
+            ]
+        parseTrkSeg trkseg = UV.fromList
+            [ parseTrkPt trkpt
+            | trkpt <- X.children trkseg
+            , X.name trkpt == "trkpt"
+            ]
+        parseTrkPt trkpt = (readDouble lat', readDouble lon')
+            where
+                attrs = X.attributes trkpt
+                Just lat' = "lat" `lookup` attrs
+                Just lon' = "lon" `lookup` attrs
 
-parseFileC :: FilePath -> ConduitT i InputEvent M ()
-parseFileC i = sourceFile i .| ungzipIfNeeded .| (parseGpxC >> sinkNull)
-    where
-        ungzipIfNeeded
-            | "gz" `isExtensionOf` i = ungzip
-            | otherwise = awaitForever yield
+readDouble :: ByteString -> Double
+readDouble b = case B.readSigned B.readDecimal b of
+    Just (d, "") -> d
+    _ -> error $ "readDouble: " ++ show b
 
 isGpx :: FilePath -> Bool
 isGpx f = "gpx" `isExtensionOf` f || "gpx.gz" `isExtensionOf` f
 
-gpxInDirectoryC :: FilePath -> ConduitT a FilePath M ()
-gpxInDirectoryC d = sourceDirectoryDeep False d .| filterC isGpx
+gpxInDirectory :: FilePath -> IO [FilePath]
+gpxInDirectory d = (map (d </>) . filter isGpx) <$> listDirectory d
 
-parseInputC :: FilePath -> ConduitT i InputEvent M ()
-parseInputC i = do
-    isDir <- liftIO $ doesDirectoryExist i
-    isFile <- liftIO $ doesFileExist i
+expandInputFile :: FilePath -> Input
+expandInputFile i = (i, parse . ungzipIfNeeded <$> B.readFile i)
+    where
+        ungzipIfNeeded
+            | "gz" `isExtensionOf` i = BL.toStrict . GZip.decompress . BL.fromStrict
+            | otherwise = id
+        parse = either (\e -> error $ i <> ": " <> show e) id . parseGpx
+
+expandInput :: FilePath -> IO [Input]
+expandInput i = do
+    isDir <- doesDirectoryExist i
+    isFile <- doesFileExist i
     case (isDir, isFile) of
-        (True, _) -> gpxInDirectoryC i .| awaitForever parseFileC
-        (_, True) | isGpx i -> parseFileC i
-        (_, _) -> fail $ "bad input file/dir: " <> i
+        (True, _) -> map expandInputFile <$> gpxInDirectory i
+        (_, True) | isGpx i -> pure [expandInputFile i]
+        (_, _) -> error $ "bad input file/dir: " <> i
 
-parseInputsC :: ConduitT FilePath InputEvent M ()
-parseInputsC = awaitForever parseInputC
-
-parseInputs :: Monoid a => ConduitT InputEvent a M () -> [FilePath] -> IO a
-parseInputs c is = runConduitRes $ yieldMany is .| parseInputsC .| c .| foldC
+expandInputs :: [FilePath] -> IO [Input]
+expandInputs is = mconcat <$> mapM expandInput is

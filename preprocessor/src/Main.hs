@@ -1,14 +1,16 @@
 module Main (main) where
 
-import Conduit
+import Control.Monad
 import System.Environment (getArgs)
+
+import qualified Data.Vector.Unboxed as UV
 
 import Main.Input
 
 main :: IO ()
 main = do
     args <- getArgs
-    parseInputs processData args
-
-processData :: ConduitT InputEvent () M ()
-processData = filterC (== EndTrkSeg) .| mapM_C (liftIO . print)
+    inputs <- expandInputs args
+    forM_ inputs $ \(filename, parseInput) -> do
+        input <- parseInput
+        print (filename, map UV.length input)

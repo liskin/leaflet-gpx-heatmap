@@ -12,13 +12,12 @@ executable:
     dependencies:
         - base
         - bytestring
-        - conduit
-        - conduit-extra
-        - data-default
+        - bytestring-lexing
         - directory
         - filepath
-        - text
-        - xml-conduit
+        - vector
+        - xeno
+        - zlib
     ghc-options:
         - -threaded
         - -Wall

@@ -15,6 +15,7 @@ executable:
         - bytestring-lexing
         - directory
         - filepath
+        - parallel-io
         - vector
         - xeno
         - zlib

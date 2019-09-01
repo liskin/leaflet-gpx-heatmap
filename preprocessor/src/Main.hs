@@ -4,9 +4,7 @@ module Main (main) where
 
 import Control.Concurrent.ParallelIO.Global (parallel)
 import Control.DeepSeq
-import Data.List (sortBy)
 import Data.Map (Map)
-import Data.Ord (comparing)
 import System.Console.AsciiProgress
 import System.Environment (getArgs)
 
@@ -21,7 +19,7 @@ main = do
 
 loadInputs :: [FilePath] -> IO (Map FilePath [TrackSegment])
 loadInputs files = do
-    inputs <- sortBy (comparing fst) <$> expandInputs files
+    inputs <- expandInputs files
     fmap Map.fromList $ progress "Loading GPX files" parallel $
         flip map inputs $ \(filename, parseInput) -> do
             !input <- force <$> parseInput

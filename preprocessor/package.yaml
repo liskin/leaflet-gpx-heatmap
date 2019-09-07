@@ -23,5 +23,6 @@ executable:
         - xeno
         - zlib
     ghc-options:
-        - -threaded
         - -Wall
+        - -threaded
+        - -with-rtsopts=-N
